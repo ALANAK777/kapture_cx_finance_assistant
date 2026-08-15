@@ -1,0 +1,158 @@
+[
+  {
+    "type": "function",
+    "async": false,
+    "method": "POST",
+    "url": "https://social-kings-refuse.loca.lt/api/webhook",
+    "function": {
+      "name": "verify_customer",
+      "description": "Authenticates customer identity against CRM records using birth year or mobile last 4 digits before disclosing debt.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "description": "Unique identifier for the customer (e.g. CUST_9942)"
+          },
+          "verification_input": {
+            "type": "string",
+            "description": "The year of birth (e.g. 2005) or last 4 digits of mobile number (e.g. 3210) provided by the caller."
+          }
+        },
+        "required": [
+          "customer_id",
+          "verification_input"
+        ]
+      }
+    },
+    "server": {
+      "url": "https://social-kings-refuse.loca.lt/api/webhook",
+      "method": "POST"
+    }
+  },
+  {
+    "type": "function",
+    "async": false,
+    "method": "POST",
+    "url": "https://social-kings-refuse.loca.lt/api/webhook",
+    "function": {
+      "name": "log_promise_to_pay",
+      "description": "Logs a customer's commitment (Promise to Pay) for overdue loan EMI in the CRM system.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "description": "Unique identifier for the customer"
+          },
+          "promised_date": {
+            "type": "string",
+            "description": "Promised date of payment in YYYY-MM-DD format"
+          },
+          "promised_amount": {
+            "type": "number",
+            "description": "Promised amount to pay in INR (e.g. 8499)"
+          }
+        },
+        "required": [
+          "customer_id",
+          "promised_date",
+          "promised_amount"
+        ]
+      }
+    },
+    "server": {
+      "url": "https://social-kings-refuse.loca.lt/api/webhook",
+      "method": "POST"
+    }
+  },
+  {
+    "type": "function",
+    "async": false,
+    "method": "POST",
+    "url": "https://social-kings-refuse.loca.lt/api/webhook",
+    "function": {
+      "name": "send_payment_link",
+      "description": "Dispatches an instant digital EMI payment link to customer's mobile number via SMS or WhatsApp.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "description": "Unique identifier for the customer"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "SMS",
+              "WhatsApp"
+            ],
+            "description": "Messaging channel to send the payment link"
+          },
+          "amount": {
+            "type": "number",
+            "description": "EMI amount for payment link generation"
+          }
+        },
+        "required": [
+          "customer_id",
+          "channel",
+          "amount"
+        ]
+      }
+    },
+    "server": {
+      "url": "https://social-kings-refuse.loca.lt/api/webhook",
+      "method": "POST"
+    }
+  },
+  {
+    "type": "function",
+    "async": false,
+    "method": "POST",
+    "url": "https://social-kings-refuse.loca.lt/api/webhook",
+    "function": {
+      "name": "mark_disposition",
+      "description": "Logs final call outcome, disposition code, and agent notes in CRM database upon call completion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "description": "Unique identifier for the customer"
+          },
+          "disposition_code": {
+            "type": "string",
+            "enum": [
+              "PTP_AGREED",
+              "ALREADY_PAID_CLAIMED",
+              "DISPUTED_LOAN",
+              "FINANCIAL_HARDSHIP",
+              "THIRD_PARTY_ANSWERED",
+              "AUTH_FAILED",
+              "DO_NOT_CALL",
+              "WRONG_NUMBER"
+            ],
+            "description": "Standard disposition outcome code for CRM reporting"
+          },
+          "call_contained": {
+            "type": "boolean",
+            "description": "True if call was resolved fully by AI without human transfer"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Summary notes describing call outcome"
+          }
+        },
+        "required": [
+          "customer_id",
+          "disposition_code"
+        ]
+      }
+    },
+    "server": {
+      "url": "https://social-kings-refuse.loca.lt/api/webhook",
+      "method": "POST"
+    }
+  }
+]

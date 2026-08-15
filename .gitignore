@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Environment & Secrets
+.env
+.env.local
+.env.production
+.env.development
+
+# Vercel
+.vercel
+
+# SQLite Database & Temp Files
+*.db
+*.sqlite
+
+# System & Logs
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*

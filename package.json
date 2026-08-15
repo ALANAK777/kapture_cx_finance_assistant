@@ -1,0 +1,17 @@
+{
+  "name": "kapture-collections-webhook",
+  "version": "1.0.0",
+  "description": "Mock API Webhook Server for Kapture CX Voice AI Collections Agent (Vapi Integration)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "tunnel": "lt --port 3000"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "localtunnel": "^2.0.2"
+  }
+}
