@@ -171,28 +171,20 @@ app.post('/api/webhook', async (req, res) => {
       const chatId = process.env.TELEGRAM_CHAT_ID || '1454696587';
 
       let telegramStatus = "Not Attempted";
-
       if (botToken && chatId) {
-        try {
-          const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-          const textMsg = `💳 *Kapture Finance Payment Link*\n\nDear Akhil,\nYour EMI of *₹${amount}* is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 https://pay.kapture.fi/emi/${amount}\n\nThank you for choosing Kapture Finance.`;
+        const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+        const textMsg = `💳 *Kapture Finance Payment Link*\n\nDear Akhil,\nYour EMI of *₹${amount}* is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
 
-          const teleRes = await fetch(telegramUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: textMsg,
-              parse_mode: 'Markdown'
-            })
-          });
-          const teleData = await teleRes.json();
-          console.log('Vercel Telegram Delivery Result:', teleData);
-          telegramStatus = teleData.ok ? "Sent Successfully" : `Failed: ${teleData.description}`;
-        } catch (e) {
-          console.error('Vercel Telegram Delivery Error:', e);
-          telegramStatus = `Error: ${e.message}`;
-        }
+        fetch(telegramUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: textMsg,
+            parse_mode: 'Markdown'
+          })
+        }).then(() => console.log(`Telegram message sent successfully to Chat ID: ${chatId}`))
+          .catch(tgErr => console.error('Error sending Telegram notification:', tgErr.message));
       }
 
       responseData = {
