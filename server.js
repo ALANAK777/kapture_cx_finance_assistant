@@ -173,15 +173,14 @@ app.post('/api/webhook', async (req, res) => {
       let telegramStatus = "Not Attempted";
       if (botToken && chatId) {
         const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-        const textMsg = `💳 *Kapture Finance Payment Link*\n\nDear Akhil,\nYour EMI of *₹${amount}* is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
+        const textMsg = `💳 Kapture Finance Payment Link\n\nDear Akhil,\nYour EMI of 8,499 Rupees is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
 
         fetch(telegramUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text: textMsg,
-            parse_mode: 'Markdown'
+            text: textMsg
           })
         }).then(() => console.log(`Telegram message sent successfully to Chat ID: ${chatId}`))
           .catch(tgErr => console.error('Error sending Telegram notification:', tgErr.message));
