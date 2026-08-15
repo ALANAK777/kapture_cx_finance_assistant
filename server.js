@@ -90,10 +90,14 @@ app.post('/api/webhook', async (req, res) => {
       const customerId = args.customer_id || 'CUST_9942';
       const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
       
-      // Collect all argument values passed by LLM into one string
-      const allArgsString = Object.values(args).map(v => String(v)).join(' ').toLowerCase();
+      // Exclude customer_id (e.g. CUST_9942) so its digits don't interfere with verification
+      const verificationArgs = { ...args };
+      delete verificationArgs.customer_id;
+      delete verificationArgs.customerId;
 
-      // Extract any 4-digit number from any parameter
+      const allArgsString = Object.values(verificationArgs).map(v => String(v)).join(' ').toLowerCase();
+
+      // Extract any 4-digit number from user verification parameters
       const digitMatch = allArgsString.match(/\d{4}/);
       const extractedDigits = digitMatch ? digitMatch[0] : '';
 
