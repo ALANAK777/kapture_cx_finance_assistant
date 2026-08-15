@@ -47,9 +47,9 @@ app.post('/api/webhook', async (req, res) => {
   // Extract message & tool call metadata
   const message = req.body.message || req.body;
   const rawToolObj = (message.toolCalls && message.toolCalls[0]) ||
-                    (message.toolCallList && message.toolCallList[0]) ||
-                    message.functionCall ||
-                    message;
+    (message.toolCallList && message.toolCallList[0]) ||
+    message.functionCall ||
+    message;
 
   const toolCallId = rawToolObj?.toolCallId || rawToolObj?.id || message?.toolCallId || message?.id || req.body?.toolCallId || req.body?.id || "tool_call_1";
   const rawFunc = rawToolObj?.function || rawToolObj;
@@ -77,7 +77,7 @@ app.post('/api/webhook', async (req, res) => {
     case 'verify_customer': {
       const customerId = args.customer_id || 'CUST_9942';
       const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
-      
+
       // Collect all argument values passed by LLM into one string
       const allArgsString = Object.values(args).map(v => String(v)).join(' ').toLowerCase();
 
@@ -138,28 +138,32 @@ app.post('/api/webhook', async (req, res) => {
       const customerId = args.customer_id || 'CUST_9942';
       const channel = args.channel || 'Telegram';
       const amount = args.amount || 8499;
-      const paymentUrl = `https://pay.kapture.fi/emi/${amount}`;
 
-      // Telegram notification integration (if credentials set in .env)
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = process.env.TELEGRAM_CHAT_ID;
+      const botToken = process.env.TELEGRAM_BOT_TOKEN || '8841894222:AAGycq_haCs1Pze5lc3kpZdPK1gBQdsZbTk';
+      const chatId = process.env.TELEGRAM_CHAT_ID || '1454696587';
+
+      let telegramStatus = "Not Attempted";
 
       if (botToken && chatId) {
         try {
           const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-          const tgRes = await fetch(telegramUrl, {
+          const textMsg = `💳 *Kapture Finance Payment Link*\n\nDear Akhil,\nYour EMI of *₹${amount}* is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 https://pay.kapture.fi/emi/${amount}\n\nThank you for choosing Kapture Finance.`;
+
+          const teleRes = await fetch(telegramUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              text: `📩 *Kapture Finance Payment Link*\n\nDear Customer, your EMI of ₹${amount} is overdue. Click to pay securely:\n${paymentUrl}`,
+              text: textMsg,
               parse_mode: 'Markdown'
             })
           });
-          const tgData = await tgRes.json();
-          console.log('Telegram API Response:', tgData);
+          const teleData = await teleRes.json();
+          console.log('Vercel Telegram Delivery Result:', teleData);
+          telegramStatus = teleData.ok ? "Sent Successfully" : `Failed: ${teleData.description}`;
         } catch (e) {
-          console.error('Failed to trigger Telegram notification:', e.message);
+          console.error('Vercel Telegram Delivery Error:', e);
+          telegramStatus = `Error: ${e.message}`;
         }
       }
 
