@@ -37,12 +37,10 @@ app.post('/api/webhook', async (req, res) => {
   const functionName = knownTools.find(t => bodyStr.includes(t));
 
   if (!functionName) {
-    console.log('No recognized tool name found in request body');
+    console.log('Status update / non-tool event received by webhook');
     return res.status(200).json({
-      results: [{
-        toolCallId: "tool_call_1",
-        result: { status: 'error', message: 'No tool call found in payload' }
-      }]
+      status: 'ok',
+      message: 'Webhook event received successfully'
     });
   }
 
