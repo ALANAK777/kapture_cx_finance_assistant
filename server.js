@@ -31,57 +31,47 @@ app.get('/', (req, res) => {
 
 // Unified Vapi Tool Call Webhook Handler
 app.post('/api/webhook', async (req, res) => {
-  console.log('--- Incoming Vapi Webhook Payload ---');
-  console.log(JSON.stringify(req.body, null, 2));
+  // Universal tool call detection
+  const knownTools = ['verify_customer', 'log_promise_to_pay', 'send_payment_link', 'mark_disposition'];
+  const bodyStr = JSON.stringify(req.body);
+  const functionName = knownTools.find(t => bodyStr.includes(t));
 
-  // Extract Vapi message and tool call payload
-  const message = req.body.message || req.body;
-
-  let toolCall = null;
-  let toolCallId = message.toolCallId || req.body.toolCallId || "tool_call_1";
-
-  if (message.functionCall) {
-    toolCall = message.functionCall;
-    toolCallId = message.functionCall.id || toolCallId;
-  } else if (message.toolCalls && message.toolCalls[0]) {
-    const tc = message.toolCalls[0];
-    toolCall = tc.function || tc;
-    toolCallId = tc.id || toolCallId;
-  } else if (message.toolCallList && message.toolCallList[0]) {
-    const tc = message.toolCallList[0];
-    toolCall = tc.function || tc;
-    toolCallId = tc.id || toolCallId;
-  } else if (req.body.functionCall) {
-    toolCall = req.body.functionCall;
-    toolCallId = req.body.functionCall.id || toolCallId;
-  } else if (req.body.toolCalls && req.body.toolCalls[0]) {
-    const tc = req.body.toolCalls[0];
-    toolCall = tc.function || tc;
-    toolCallId = tc.id || toolCallId;
-  } else if (message.name) {
-    toolCall = message;
-    toolCallId = message.id || toolCallId;
-  }
-
-  if (!toolCall || !toolCall.name) {
+  if (!functionName) {
+    console.log('No recognized tool name found in request body');
     return res.status(200).json({
       results: [{
-        toolCallId: toolCallId,
+        toolCallId: "tool_call_1",
         result: { status: 'error', message: 'No tool call found in payload' }
       }]
     });
   }
 
-  const functionName = toolCall.name;
-  let args = {};
+  // Extract message & tool call metadata
+  const message = req.body.message || req.body;
+  const rawToolObj = (message.toolCalls && message.toolCalls[0]) ||
+                    (message.toolCallList && message.toolCallList[0]) ||
+                    message.functionCall ||
+                    message;
 
-  try {
-    args = typeof toolCall.arguments === 'string' ? JSON.parse(toolCall.arguments) : toolCall.arguments;
-  } catch (e) {
-    args = toolCall.arguments || {};
+  const toolCallId = rawToolObj?.id || message?.toolCallId || req.body?.toolCallId || "tool_call_1";
+  const rawFunc = rawToolObj?.function || rawToolObj;
+
+  let args = {};
+  if (rawFunc && rawFunc.arguments) {
+    try {
+      args = typeof rawFunc.arguments === 'string' ? JSON.parse(rawFunc.arguments) : rawFunc.arguments;
+    } catch (e) {
+      args = rawFunc.arguments || {};
+    }
+  } else if (message.arguments) {
+    try {
+      args = typeof message.arguments === 'string' ? JSON.parse(message.arguments) : message.arguments;
+    } catch (e) {
+      args = message.arguments || {};
+    }
   }
 
-  console.log(`Executing Tool: ${functionName} with arguments:`, args);
+  console.log(`Executing Tool: [${functionName}] with toolCallId: [${toolCallId}] and arguments:`, args);
 
   let responseData = {};
 
