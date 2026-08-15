@@ -77,13 +77,25 @@ app.post('/api/webhook', async (req, res) => {
     case 'verify_customer': {
       const customerId = args.customer_id || 'CUST_9942';
       const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
-
+      
       // Collect all argument values passed by LLM into one string
       const allArgsString = Object.values(args).map(v => String(v)).join(' ').toLowerCase();
 
       // Extract any 4-digit number from any parameter
       const digitMatch = allArgsString.match(/\d{4}/);
       const extractedDigits = digitMatch ? digitMatch[0] : '';
+
+      if (!extractedDigits && !allArgsString.includes('two thousand five')) {
+        console.log('Empty or non-numerical input to verify_customer. Requiring customer input.');
+        responseData = {
+          verified: false,
+          is_verified: false,
+          requires_input: true,
+          status: "awaiting_input",
+          message: "No verification digits provided. Please ask the customer for their Year of Birth or last 4 mobile digits."
+        };
+        break;
+      }
 
       const isVerified = (
         extractedDigits === customer.dob_year ||
