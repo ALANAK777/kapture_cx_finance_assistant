@@ -51,7 +51,7 @@ app.post('/api/webhook', async (req, res) => {
                     message.functionCall ||
                     message;
 
-  const toolCallId = rawToolObj?.id || message?.toolCallId || req.body?.toolCallId || "tool_call_1";
+  const toolCallId = rawToolObj?.toolCallId || rawToolObj?.id || message?.toolCallId || message?.id || req.body?.toolCallId || req.body?.id || "tool_call_1";
   const rawFunc = rawToolObj?.function || rawToolObj;
 
   let args = {};
