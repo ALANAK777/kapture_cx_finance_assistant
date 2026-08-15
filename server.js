@@ -36,18 +36,38 @@ app.post('/api/webhook', async (req, res) => {
 
   // Extract Vapi message and tool call payload
   const message = req.body.message || req.body;
-  const toolCallContainer = (message.toolCalls && message.toolCalls[0]) ||
-                            (message.toolCallList && message.toolCallList[0]) ||
-                            message;
 
-  const toolCallId = toolCallContainer?.id || message.toolCallId || req.body.toolCallId || "tool_call_1";
-  const toolCall = toolCallContainer?.function || message.functionCall || toolCallContainer;
+  let toolCall = null;
+  let toolCallId = message.toolCallId || req.body.toolCallId || "tool_call_1";
+
+  if (message.functionCall) {
+    toolCall = message.functionCall;
+    toolCallId = message.functionCall.id || toolCallId;
+  } else if (message.toolCalls && message.toolCalls[0]) {
+    const tc = message.toolCalls[0];
+    toolCall = tc.function || tc;
+    toolCallId = tc.id || toolCallId;
+  } else if (message.toolCallList && message.toolCallList[0]) {
+    const tc = message.toolCallList[0];
+    toolCall = tc.function || tc;
+    toolCallId = tc.id || toolCallId;
+  } else if (req.body.functionCall) {
+    toolCall = req.body.functionCall;
+    toolCallId = req.body.functionCall.id || toolCallId;
+  } else if (req.body.toolCalls && req.body.toolCalls[0]) {
+    const tc = req.body.toolCalls[0];
+    toolCall = tc.function || tc;
+    toolCallId = tc.id || toolCallId;
+  } else if (message.name) {
+    toolCall = message;
+    toolCallId = message.id || toolCallId;
+  }
 
   if (!toolCall || !toolCall.name) {
     return res.status(200).json({
       results: [{
         toolCallId: toolCallId,
-        result: JSON.stringify({ status: 'error', message: 'No tool call found in payload' })
+        result: { status: 'error', message: 'No tool call found in payload' }
       }]
     });
   }
