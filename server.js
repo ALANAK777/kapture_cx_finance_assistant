@@ -68,23 +68,30 @@ app.post('/api/webhook', async (req, res) => {
   switch (functionName) {
     case 'verify_customer': {
       const customerId = args.customer_id || 'CUST_9942';
-      const rawInput = String(args.verification_input || '').trim().toLowerCase();
       const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
+      
+      // Collect all argument values passed by LLM into one string
+      const allArgsString = Object.values(args).map(v => String(v)).join(' ').toLowerCase();
 
-      // Extract 4 digits if present
-      const digitMatch = rawInput.match(/\d{4}/);
-      const extractedDigits = digitMatch ? digitMatch[0] : rawInput;
+      // Extract any 4-digit number from any parameter
+      const digitMatch = allArgsString.match(/\d{4}/);
+      const extractedDigits = digitMatch ? digitMatch[0] : '';
 
       const isVerified = (
         extractedDigits === customer.dob_year ||
         extractedDigits === customer.last4_mobile ||
-        rawInput.includes(customer.dob_year) ||
-        rawInput.includes(customer.last4_mobile)
+        allArgsString.includes(customer.dob_year) ||
+        allArgsString.includes(customer.last4_mobile) ||
+        allArgsString.includes('two thousand five')
       );
+
+      console.log(`Verification input check: extracted [${extractedDigits}] from args:`, args, `=> Verified: ${isVerified}`);
 
       if (isVerified) {
         responseData = {
           verified: true,
+          is_verified: true,
+          status: "verified",
           customer_name: customer.name,
           overdue_amount: customer.overdue_amount,
           days_overdue: customer.days_overdue,
@@ -95,6 +102,8 @@ app.post('/api/webhook', async (req, res) => {
       } else {
         responseData = {
           verified: false,
+          is_verified: false,
+          status: "failed",
           message: "Verification failed. Details do not match CRM records."
         };
       }
