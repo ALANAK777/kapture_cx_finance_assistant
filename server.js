@@ -55,17 +55,29 @@ app.post('/api/webhook', async (req, res) => {
   const rawFunc = rawToolObj?.function || rawToolObj;
 
   let args = {};
-  if (rawFunc && rawFunc.arguments) {
-    try {
-      args = typeof rawFunc.arguments === 'string' ? JSON.parse(rawFunc.arguments) : rawFunc.arguments;
-    } catch (e) {
-      args = rawFunc.arguments || {};
-    }
-  } else if (message.arguments) {
-    try {
-      args = typeof message.arguments === 'string' ? JSON.parse(message.arguments) : message.arguments;
-    } catch (e) {
-      args = message.arguments || {};
+  const candidates = [
+    rawToolObj?.arguments,
+    rawToolObj?.body,
+    rawFunc?.arguments,
+    rawFunc?.body,
+    message?.arguments,
+    message?.body,
+    req.body?.arguments,
+    req.body?.body
+  ];
+
+  for (const cand of candidates) {
+    if (cand && typeof cand === 'object' && Object.keys(cand).length > 0) {
+      args = cand;
+      break;
+    } else if (cand && typeof cand === 'string') {
+      try {
+        const parsed = JSON.parse(cand);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          args = parsed;
+          break;
+        }
+      } catch (e) {}
     }
   }
 
