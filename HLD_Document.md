@@ -18,27 +18,26 @@ The system uses a low-latency voice pipeline integrating SIP telephony, real-tim
 
 ```mermaid
 flowchart TB
-    subgraph UserLayer["📱 Customer Telephony Layer"]
+    subgraph UserLayer["Customer Telephony Layer"]
         User["Customer (PSTN / Mobile Phone)"]
         Telephony["Vapi SIP Telephony Gateway"]
     end
 
-    subgraph VoiceAICore["🤖 Vapi Voice AI Platform"]
-        STT["Speech-to-Text (STT)<br/><b>Deepgram Nova-2</b><br/><i>(~150ms)</i>"]
-        LLM["Conversation Orchestrator<br/><b>OpenAI GPT-4o-mini</b><br/><i>(~200ms, Temp 0.1)</i>"]
-        TTS["Text-to-Speech (TTS)<br/><b>Cartesia Sonic / ElevenLabs</b><br/><i>(~180ms)</i>"]
+    subgraph VoiceAICore["Vapi Voice AI Platform"]
+        STT["Speech-to-Text (STT)<br/>Deepgram Nova-2 (~150ms)"]
+        LLM["Conversation Orchestrator<br/>OpenAI GPT-4o-mini (~200ms)"]
+        TTS["Text-to-Speech (TTS)<br/>Cartesia Sonic / ElevenLabs (~180ms)"]
     end
 
-    subgraph BackendServices["⚙️ Kapture Webhook Backend (Vercel)"]
-        Webhook["Express.js Webhook Server<br/><code>/api/webhook</code>"]
-        CRMDB[("CRM & Customer DB<br/><i>(Akhil - CUST_9942)</i>")]
+    subgraph BackendServices["Kapture Webhook Backend"]
+        Webhook["Express.js Webhook Server<br/>/api/webhook"]
+        CRMDB[("CRM Database<br/>Akhil - CUST_9942")]
     end
 
-    subgraph ExternalServices["📲 External Notification Channels"]
-        Telegram["Telegram Bot API<br/><i>(Instant EMI Payment Link)</i>"]
+    subgraph ExternalServices["External Notification Channels"]
+        Telegram["Telegram Bot API<br/>Instant EMI Payment Link"]
     end
 
-    %% Connections
     User <-->|"Bi-directional Audio (PSTN/SIP)"| Telephony
     Telephony <-->|"WebSocket Audio Stream"| STT
     STT -->|"Real-time Text Transcript"| LLM
@@ -48,17 +47,6 @@ flowchart TB
     LLM <-->|"JSON Tool Calls (HTTPS POST)"| Webhook
     Webhook <-->|"Query & Update Records"| CRMDB
     Webhook -->|"Dispatch Payment Link"| Telegram
-
-    %% Styling
-    classDef user fill:#EBF5FF,stroke:#1E40AF,stroke-width:2px,color:#1E3A8A;
-    classDef vapi fill:#F3E8FF,stroke:#6B21A8,stroke-width:2px,color:#581C87;
-    classDef backend fill:#ECFDF5,stroke:#047857,stroke-width:2px,color:#064E3B;
-    classDef channel fill:#FFFBEB,stroke:#B45309,stroke-width:2px,color:#78350F;
-
-    class User,Telephony user;
-    class STT,LLM,TTS vapi;
-    class Webhook,CRMDB backend;
-    class Telegram channel;
 ```
 
 ### 2.1 Latency Budget Per Hop
