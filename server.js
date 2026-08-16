@@ -176,22 +176,22 @@ app.post('/api/webhook', async (req, res) => {
         const textMsg = `💳 Kapture Finance Payment Link\n\nDear Akhil,\nYour EMI of 8,499 Rupees is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
 
         try {
-          const controller = new AbortController();
-          const timerId = setTimeout(() => controller.abort(), 3000);
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timerId = controller ? setTimeout(() => controller.abort(), 3000) : null;
 
-          fetch(telegramUrl, {
+          await fetch(telegramUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller ? controller.signal : undefined,
             body: JSON.stringify({
               chat_id: chatId,
               text: textMsg
-            }),
-            signal: controller.signal
+            })
           }).then(() => {
-            clearTimeout(timerId);
+            if (timerId) clearTimeout(timerId);
             console.log(`Telegram message sent successfully to Chat ID: ${chatId}`);
           }).catch(tgErr => {
-            clearTimeout(timerId);
+            if (timerId) clearTimeout(timerId);
             console.error('Error sending Telegram notification:', tgErr.message);
           });
         } catch (e) {
