@@ -166,6 +166,7 @@ app.post('/api/webhook', async (req, res) => {
       const customerId = args.customer_id || 'CUST_9942';
       const channel = args.channel || 'Telegram';
       const amount = args.amount || 8499;
+      const paymentUrl = `https://pay.kapture.fi/emi/${amount}`;
 
       const botToken = process.env.TELEGRAM_BOT_TOKEN || '8841894222:AAGycq_haCs1Pze5lc3kpZdPK1gBQdsZbTk';
       const chatId = process.env.TELEGRAM_CHAT_ID || '1454696587';
