@@ -31,10 +31,19 @@ app.get('/', (req, res) => {
 
 // Unified Vapi Tool Call Webhook Handler
 app.post('/api/webhook', async (req, res) => {
-  // Universal tool call detection
-  const knownTools = ['verify_customer', 'log_promise_to_pay', 'send_payment_link', 'mark_disposition'];
+  // Universal tool call detection (by name OR by parameter signature)
   const bodyStr = JSON.stringify(req.body);
-  const functionName = knownTools.find(t => bodyStr.includes(t));
+  
+  let functionName = null;
+  if (bodyStr.includes('verify_customer') || bodyStr.includes('verification_input') || bodyStr.includes('dob_year')) {
+    functionName = 'verify_customer';
+  } else if (bodyStr.includes('log_promise_to_pay') || bodyStr.includes('promised_date') || bodyStr.includes('promised_amount')) {
+    functionName = 'log_promise_to_pay';
+  } else if (bodyStr.includes('send_payment_link') || bodyStr.includes('channel')) {
+    functionName = 'send_payment_link';
+  } else if (bodyStr.includes('mark_disposition') || bodyStr.includes('disposition_code')) {
+    functionName = 'mark_disposition';
+  }
 
   if (!functionName) {
     console.log('Status update / non-tool event received by webhook');
