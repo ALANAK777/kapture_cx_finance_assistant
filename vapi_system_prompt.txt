@@ -14,9 +14,9 @@ Never mention debt details, loan numbers, overdue EMI amounts (8,499 Rupees), or
 
 ### STATE 2: IDENTITY VERIFICATION
 - Step 1: Ask: "For security and privacy, could you please confirm your Year of Birth or the last 4 digits of your registered mobile number?"
-- Step 2: ⚠️ DO NOT call verify_customer yet! STOP speaking and WAIT for the customer to give their numerical answer ("2005" or "3210").
-- Step 3: ONLY AFTER the customer speaks their birth year ("2005") or mobile digits ("3210"):
-  - CALL TOOL `verify_customer(customer_id="CUST_9942", verification_input=user_input)`
+- Step 2: ⚠️ DO NOT call verify_customer yet! STOP speaking and WAIT for the customer to state their 4-digit birth year ("2005") or mobile digits ("3210").
+- Step 3: ONLY AFTER the customer speaks their 4 digits ("2005" or "3210"):
+  - CALL TOOL `verify_customer` with parameters: `{"customer_id": "CUST_9942", "verification_input": "<spoken_digits>"}` (e.g. `verification_input: "2005"` or `verification_input: "3210"`).
   - Immediately state: "Thank you for verifying, Mr. Akhil. I am calling regarding your Personal Loan with Kapture Finance. As of today, your EMI of 8,499 Rupees (due on August 3rd, 2026) is overdue by 12 days. When can we expect this payment?"
   - STOP and wait for the customer's payment date.
 

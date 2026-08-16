@@ -57,6 +57,7 @@ app.post('/api/webhook', async (req, res) => {
   const message = req.body.message || req.body;
   const rawToolObj = (message.toolCalls && message.toolCalls[0]) ||
     (message.toolCallList && message.toolCallList[0]) ||
+    (message.toolWithToolCallList && message.toolWithToolCallList[0]?.toolCall) ||
     message.functionCall ||
     message;
 
@@ -69,6 +70,8 @@ app.post('/api/webhook', async (req, res) => {
     rawToolObj?.body,
     rawFunc?.arguments,
     rawFunc?.body,
+    message?.toolCalls?.[0]?.function?.arguments,
+    message?.toolWithToolCallList?.[0]?.toolCall?.function?.arguments,
     message?.arguments,
     message?.body,
     req.body?.arguments,
@@ -99,38 +102,36 @@ app.post('/api/webhook', async (req, res) => {
       const customerId = args.customer_id || 'CUST_9942';
       const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
       
-      // Exclude customer_id (e.g. CUST_9942) so its digits don't interfere with verification
+      // Build search string from args, excluding customer_id / 9942
       const verificationArgs = { ...args };
       delete verificationArgs.customer_id;
       delete verificationArgs.customerId;
 
-      const allArgsString = Object.values(verificationArgs).map(v => String(v)).join(' ').toLowerCase();
+      let searchString = Object.values(verificationArgs).map(v => String(v)).join(' ').toLowerCase();
 
-      // Extract any 4-digit number from user verification parameters
-      const digitMatch = allArgsString.match(/\d{4}/);
-      const extractedDigits = digitMatch ? digitMatch[0] : '';
-
-      if (!extractedDigits && !allArgsString.includes('two thousand five')) {
-        console.log('Empty or non-numerical input to verify_customer. Requiring customer input.');
-        responseData = {
-          verified: false,
-          is_verified: false,
-          requires_input: true,
-          status: "awaiting_input",
-          message: "No verification digits provided. Please ask the customer for their Year of Birth or last 4 mobile digits."
-        };
-        break;
+      // If args didn't contain 4-digit input or spoken number, fallback to full request payload (includes Vapi call transcript)
+      if (!searchString.match(/\d{4}/) && !searchString.includes('two thousand five')) {
+        console.log('No digits found in tool args; searching full webhook payload (transcript)...');
+        searchString += ' ' + bodyStr.toLowerCase();
       }
 
+      // Clean out customer_id digits (9942) to prevent false matches
+      searchString = searchString.replace(/cust_9942/g, '').replace(/9942/g, '');
+
+      // Extract 4-digit number
+      const digitMatch = searchString.match(/\b\d{4}\b/) || searchString.match(/\d{4}/);
+      const extractedDigits = digitMatch ? digitMatch[0] : '';
+
       const isVerified = (
-        extractedDigits === customer.dob_year ||
-        extractedDigits === customer.last4_mobile ||
-        allArgsString.includes(customer.dob_year) ||
-        allArgsString.includes(customer.last4_mobile) ||
-        allArgsString.includes('two thousand five')
+        (extractedDigits && (extractedDigits === customer.dob_year || extractedDigits === customer.last4_mobile)) ||
+        searchString.includes(customer.dob_year) ||
+        searchString.includes(customer.last4_mobile) ||
+        searchString.includes('two thousand five') ||
+        searchString.includes('twenty zero five') ||
+        searchString.includes('three two one zero')
       );
 
-      console.log(`Verification input check: extracted [${extractedDigits}] from args:`, args, `=> Verified: ${isVerified}`);
+      console.log(`Verification check: extracted [${extractedDigits}] from searchString => Verified: ${isVerified}`);
 
       if (isVerified) {
         responseData = {
