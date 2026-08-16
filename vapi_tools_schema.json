@@ -2,8 +2,6 @@
   {
     "type": "function",
     "async": false,
-    "method": "POST",
-    "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
     "function": {
       "name": "verify_customer",
       "description": "Authenticates customer identity against CRM records using birth year or mobile last 4 digits before disclosing debt.",
@@ -26,15 +24,12 @@
       }
     },
     "server": {
-      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
-      "method": "POST"
+      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook"
     }
   },
   {
     "type": "function",
     "async": false,
-    "method": "POST",
-    "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
     "function": {
       "name": "log_promise_to_pay",
       "description": "Logs a customer's commitment (Promise to Pay) for overdue loan EMI in the CRM system.",
@@ -62,15 +57,12 @@
       }
     },
     "server": {
-      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
-      "method": "POST"
+      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook"
     }
   },
   {
     "type": "function",
     "async": false,
-    "method": "POST",
-    "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
     "function": {
       "name": "send_payment_link",
       "description": "Dispatches an instant digital EMI payment link to customer's mobile number via SMS or WhatsApp.",
@@ -85,7 +77,8 @@
             "type": "string",
             "enum": [
               "SMS",
-              "WhatsApp"
+              "WhatsApp",
+              "Telegram"
             ],
             "description": "Messaging channel to send the payment link"
           },
@@ -102,15 +95,12 @@
       }
     },
     "server": {
-      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
-      "method": "POST"
+      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook"
     }
   },
   {
     "type": "function",
     "async": false,
-    "method": "POST",
-    "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
     "function": {
       "name": "mark_disposition",
       "description": "Logs final call outcome, disposition code, and agent notes in CRM database upon call completion.",
@@ -151,8 +141,7 @@
       }
     },
     "server": {
-      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook",
-      "method": "POST"
+      "url": "https://kapture-cx-finance-assistant.vercel.app/api/webhook"
     }
   }
 ]
