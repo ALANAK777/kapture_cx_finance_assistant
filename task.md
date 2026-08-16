@@ -102,4 +102,3 @@ We do not expect production perfection. A thoughtful, honest, working-enough bui
 
 
 
-Explain this project

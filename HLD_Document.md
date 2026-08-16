@@ -17,14 +17,48 @@ Kapture Finance requires an automated outbound Voice AI collections agent ("Maya
 The system uses a low-latency voice pipeline integrating SIP telephony, real-time Speech-to-Text (STT), Large Language Model (LLM) orchestration, Text-to-Speech (TTS), and backend API webhooks.
 
 ```mermaid
-flowchart LR
-    A[Customer Phone] <-->|SIP / Telephony| B[Telephony Gateway / Vapi SIP]
-    B <-->|Audio Stream - WebSockets| C[STT: Deepgram Nova-2]
-    C -->|Real-time Text Transcripts| D[Orchestrator / LLM: GPT-4o-mini]
-    D <-->|JSON Tool Calls & Webhooks| E[Backend Webhook API Server]
-    D -->|Generated Text Responses| F[TTS: Cartesia Sonic / ElevenLabs]
-    F -->|Audio Stream| B
-    E <-->|Queries & Updates| G[(Customer CRM & Ledger DB)]
+flowchart TB
+    subgraph UserLayer["📱 Customer Telephony Layer"]
+        User["Customer (PSTN / Mobile Phone)"]
+        Telephony["Vapi SIP Telephony Gateway"]
+    end
+
+    subgraph VoiceAICore["🤖 Vapi Voice AI Platform"]
+        STT["Speech-to-Text (STT)<br/><b>Deepgram Nova-2</b><br/><i>(~150ms)</i>"]
+        LLM["Conversation Orchestrator<br/><b>OpenAI GPT-4o-mini</b><br/><i>(~200ms, Temp 0.1)</i>"]
+        TTS["Text-to-Speech (TTS)<br/><b>Cartesia Sonic / ElevenLabs</b><br/><i>(~180ms)</i>"]
+    end
+
+    subgraph BackendServices["⚙️ Kapture Webhook Backend (Vercel)"]
+        Webhook["Express.js Webhook Server<br/><code>/api/webhook</code>"]
+        CRMDB[("CRM & Customer DB<br/><i>(Akhil - CUST_9942)</i>")]
+    end
+
+    subgraph ExternalServices["📲 External Notification Channels"]
+        Telegram["Telegram Bot API<br/><i>(Instant EMI Payment Link)</i>"]
+    end
+
+    %% Connections
+    User <-->|"Bi-directional Audio (PSTN/SIP)"| Telephony
+    Telephony <-->|"WebSocket Audio Stream"| STT
+    STT -->|"Real-time Text Transcript"| LLM
+    LLM -->|"Audio Synthesis Request"| TTS
+    TTS -->|"Streaming Audio Response"| Telephony
+
+    LLM <-->|"JSON Tool Calls (HTTPS POST)"| Webhook
+    Webhook <-->|"Query & Update Records"| CRMDB
+    Webhook -->|"Dispatch Payment Link"| Telegram
+
+    %% Styling
+    classDef user fill:#EBF5FF,stroke:#1E40AF,stroke-width:2px,color:#1E3A8A;
+    classDef vapi fill:#F3E8FF,stroke:#6B21A8,stroke-width:2px,color:#581C87;
+    classDef backend fill:#ECFDF5,stroke:#047857,stroke-width:2px,color:#064E3B;
+    classDef channel fill:#FFFBEB,stroke:#B45309,stroke-width:2px,color:#78350F;
+
+    class User,Telephony user;
+    class STT,LLM,TTS vapi;
+    class Webhook,CRMDB backend;
+    class Telegram channel;
 ```
 
 ### 2.1 Latency Budget Per Hop
@@ -48,34 +82,48 @@ The voice agent is governed by a **deterministic state machine**. State transiti
 
 ```mermaid
 stateDiagram-v2
-    [*] --> INITIATED
-    INITIATED --> DISCLOSURE: Call Connected
-    DISCLOSURE --> IDENTITY_VERIFICATION: State Lock (No Debt Disclosed)
-    
-    IDENTITY_VERIFICATION --> OVERDUE_DISCLOSURE: Auth Success (DOB/Last 4 verified)
-    IDENTITY_VERIFICATION --> FAILED_AUTH: Auth Failed / Wrong Person
-    FAILED_AUTH --> END_CALL: Log Disposition & Disconnect
-    
-    OVERDUE_DISCLOSURE --> INTENT_RECOGNITION: Disclose ₹8,499 EMI & 12 Days Past Due
-    
-    INTENT_RECOGNITION --> NEGOTIATION_PTP: Intent = Will Pay
-    INTENT_RECOGNITION --> HARDSHIP_HANDLING: Intent = Cannot Pay / Financial Crisis
-    INTENT_RECOGNITION --> DISPUTE_HANDLING: Intent = Disputes Debt / Amount Incorrect
-    INTENT_RECOGNITION --> ALREADY_PAID: Intent = Already Paid
-    INTENT_RECOGNITION --> OPT_OUT_DNC: Intent = Do Not Call / Refuse Conversation
-    
-    NEGOTIATION_PTP --> TRIGGER_PAYMENT_LINK: Customer Agrees to Pay Date/Amount
-    TRIGGER_PAYMENT_LINK --> CLOSING_DISPOSITION: Call log_promise_to_pay & send_payment_link
-    
-    HARDSHIP_HANDLING --> ESCALATE_HUMAN: Log Partial PTP / Human Escalation
-    DISPUTE_HANDLING --> ESCALATE_HUMAN: Call escalate_to_human
-    ALREADY_PAID --> VERIFY_PAYMENT: Capture Reference / UTR & Log
-    OPT_OUT_DNC --> MARK_DNC: Call mark_disposition (DNC) & End Call
-    
-    VERIFY_PAYMENT --> CLOSING_DISPOSITION
-    ESCALATE_HUMAN --> CLOSING_DISPOSITION
-    MARK_DNC --> CLOSING_DISPOSITION
-    CLOSING_DISPOSITION --> [*]: Disconnect & Save DB Audit Trail
+    direction TB
+
+    [*] --> INITIATED : Outbound Call Answered
+
+    state "1. Greeting & Identity Disclosure" as GREETING {
+        INITIATED --> DISCLOSURE : Hello, this is Maya from Kapture Finance
+    }
+
+    state "2. Identity Verification (State Lock)" as AUTH {
+        DISCLOSURE --> WAIT_FOR_AUTH_INPUT : Ask DOB Year or Last 4 Mobile Digits
+        WAIT_FOR_AUTH_INPUT --> CALL_VERIFY_TOOL : User speaks "2005" / "3210"
+        CALL_VERIFY_TOOL --> VERIFICATION_CHECK : Execute verify_customer
+    }
+
+    VERIFICATION_CHECK --> FAILED_AUTH : Auth Failed / Invalid Input
+    FAILED_AUTH --> END_CALL : Log AUTH_FAILED & Disconnect
+
+    VERIFICATION_CHECK --> OVERDUE_DISCLOSURE : Auth Success (Verified)
+
+    state "3. Overdue EMI Disclosure & Negotiation" as NEGOTIATION {
+        OVERDUE_DISCLOSURE --> INTENT_ANALYSIS : Disclose ₹8,499 EMI (12 Days Overdue)
+        
+        INTENT_ANALYSIS --> LOG_PTP : Intent: Will Pay
+        LOG_PTP --> SEND_PAYMENT_LINK : User confirms date (Aug 18) -> Call log_promise_to_pay
+        SEND_PAYMENT_LINK --> LOG_PTP_DISPOSITION : Call send_payment_link (Telegram/SMS)
+    }
+
+    state "4. Edge Case Handling" as EDGE_CASES {
+        INTENT_ANALYSIS --> ALREADY_PAID : Intent: Already Paid -> Capture UTR/Date
+        INTENT_ANALYSIS --> DISPUTE : Intent: Disputes Debt -> Log Dispute
+        INTENT_ANALYSIS --> DO_NOT_CALL : Intent: Opt Out / DNC -> Register DNC
+        INTENT_ANALYSIS --> WRONG_NUMBER : Intent: Wrong Person -> Log Wrong Number
+    }
+
+    ALREADY_PAID --> LOG_OTHER_DISPOSITION : Call mark_disposition (ALREADY_PAID_CLAIMED)
+    DISPUTE --> LOG_OTHER_DISPOSITION : Call mark_disposition (DISPUTED_LOAN)
+    DO_NOT_CALL --> LOG_OTHER_DISPOSITION : Call mark_disposition (DO_NOT_CALL)
+    WRONG_NUMBER --> LOG_OTHER_DISPOSITION : Call mark_disposition (WRONG_NUMBER)
+    LOG_PTP_DISPOSITION --> LOG_OTHER_DISPOSITION : Call mark_disposition (PTP_AGREED)
+
+    LOG_OTHER_DISPOSITION --> END_CALL : Save CRM Audit Trail
+    END_CALL --> [*] : Disconnect Call
 ```
 
 ### State Lock Rules:
