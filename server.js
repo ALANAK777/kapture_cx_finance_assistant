@@ -99,24 +99,16 @@ async function dispatchTelegramNotification(chatId, botToken, paymentUrl, amount
   const textMsg = `💳 Kapture Finance Payment Link\n\nDear Akhil,\nYour EMI of ₹${amount.toLocaleString('en-IN')} is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
 
   try {
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timerId = controller ? setTimeout(() => controller.abort(), 3000) : null;
-
-    fetch(telegramUrl, {
+    const response = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: controller ? controller.signal : undefined,
       body: JSON.stringify({
         chat_id: chatId,
         text: textMsg
       })
-    }).then(() => {
-      if (timerId) clearTimeout(timerId);
-      console.log(`Telegram payment notification sent to Chat ID: ${chatId}`);
-    }).catch(err => {
-      if (timerId) clearTimeout(timerId);
-      console.error('Telegram notification error:', err.message);
     });
+    const data = await response.json();
+    console.log(`Telegram dispatch status for Chat ID [${chatId}]:`, data);
   } catch (e) {
     console.error('Telegram dispatch error:', e.message);
   }
@@ -206,15 +198,15 @@ async function handleSendPaymentLink(args) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN || '8841894222:AAGycq_haCs1Pze5lc3kpZdPK1gBQdsZbTk';
   const chatId = process.env.TELEGRAM_CHAT_ID || '1454696587';
 
-  // Dispatch payment notification to Telegram in background
-  dispatchTelegramNotification(chatId, botToken, paymentUrl, amount);
+  // Await Telegram notification dispatch before returning (required for serverless functions)
+  await dispatchTelegramNotification(chatId, botToken, paymentUrl, amount);
 
   return {
     status: "sent",
     channel: channel,
     payment_url: paymentUrl,
     timestamp: new Date().toISOString(),
-    message: `Payment link of ₹${amount} successfully dispatched via ${channel}${botToken ? ' & Telegram' : ''}.`
+    message: `Payment link of ₹${amount} successfully dispatched via ${channel} & Telegram.`
   };
 }
 
