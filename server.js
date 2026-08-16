@@ -245,18 +245,19 @@ app.post('/api/webhook', async (req, res) => {
 
   console.log(`Tool Result for ${functionName}:`, responseData);
 
-  // Return standard Vapi tool response format with top-level fallback flags
+  // Convert responseData to string as required by Vapi documentation (https://docs.vapi.ai/tools)
+  const resultString = typeof responseData === 'string'
+    ? responseData
+    : JSON.stringify(responseData);
+
+  // Standard Vapi Tool Response Format (200 OK with results array)
   return res.status(200).json({
-    verified: responseData.verified ?? true,
-    is_verified: responseData.is_verified ?? true,
-    status: responseData.status || "success",
     results: [
       {
         toolCallId: toolCallId,
-        result: responseData
+        result: resultString
       }
-    ],
-    result: responseData
+    ]
   });
 });
 
