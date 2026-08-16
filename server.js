@@ -6,7 +6,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Mock In-Memory Customer Database
+// ==========================================
+// 1. MOCK CRM CUSTOMER DATABASE
+// ==========================================
 const CUSTOMER_DB = {
   "CUST_9942": {
     name: "Akhil",
@@ -20,20 +22,18 @@ const CUSTOMER_DB = {
   }
 };
 
-// Health Check Endpoint
-app.get('/', (req, res) => {
-  res.json({
-    status: 'online',
-    service: 'Kapture Finance Voicebot Webhook API',
-    timestamp: new Date().toISOString()
-  });
-});
+// ==========================================
+// 2. HELPER UTILITIES
+// ==========================================
 
-// Unified Vapi Tool Call Webhook Handler
-app.post('/api/webhook', async (req, res) => {
-  // Universal tool call detection (by name OR by parameter signature)
+/**
+ * Extracts tool call metadata (function name, tool call ID, and arguments)
+ * from Vapi's webhook request payload.
+ */
+function extractToolCallMetadata(req) {
   const bodyStr = JSON.stringify(req.body);
-  
+
+  // Detect tool function by name or parameter signature
   let functionName = null;
   if (bodyStr.includes('verify_customer') || bodyStr.includes('verification_input') || bodyStr.includes('dob_year')) {
     functionName = 'verify_customer';
@@ -45,15 +45,8 @@ app.post('/api/webhook', async (req, res) => {
     functionName = 'mark_disposition';
   }
 
-  if (!functionName) {
-    console.log('Status update / non-tool event received by webhook');
-    return res.status(200).json({
-      status: 'ok',
-      message: 'Webhook event received successfully'
-    });
-  }
+  if (!functionName) return null;
 
-  // Extract message & tool call metadata
   const message = req.body.message || req.body;
   const rawToolObj = (message.toolCalls && message.toolCalls[0]) ||
     (message.toolCallList && message.toolCallList[0]) ||
@@ -93,150 +86,197 @@ app.post('/api/webhook', async (req, res) => {
     }
   }
 
-  console.log(`Executing Tool: [${functionName}] with toolCallId: [${toolCallId}] and arguments:`, args);
+  return { functionName, toolCallId, args, bodyStr };
+}
+
+/**
+ * Dispatches an instant payment link notification via Telegram Bot API.
+ */
+async function dispatchTelegramNotification(chatId, botToken, paymentUrl, amount) {
+  if (!botToken || !chatId) return;
+
+  const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  const textMsg = `💳 Kapture Finance Payment Link\n\nDear Akhil,\nYour EMI of ₹${amount.toLocaleString('en-IN')} is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
+
+  try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timerId = controller ? setTimeout(() => controller.abort(), 3000) : null;
+
+    fetch(telegramUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller ? controller.signal : undefined,
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: textMsg
+      })
+    }).then(() => {
+      if (timerId) clearTimeout(timerId);
+      console.log(`Telegram payment notification sent to Chat ID: ${chatId}`);
+    }).catch(err => {
+      if (timerId) clearTimeout(timerId);
+      console.error('Telegram notification error:', err.message);
+    });
+  } catch (e) {
+    console.error('Telegram dispatch error:', e.message);
+  }
+}
+
+// ==========================================
+// 3. TOOL BUSINESS LOGIC HANDLERS
+// ==========================================
+
+function handleVerifyCustomer(args, bodyStr) {
+  const customerId = args.customer_id || 'CUST_9942';
+  const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
+  
+  // Build search text from parameters (excluding customer ID to prevent false matches)
+  const verificationArgs = { ...args };
+  delete verificationArgs.customer_id;
+  delete verificationArgs.customerId;
+
+  let searchString = Object.values(verificationArgs).map(v => String(v)).join(' ').toLowerCase();
+
+  // Fallback: If arguments do not contain a 4-digit number, search full request body (transcript)
+  if (!searchString.match(/\d{4}/) && !searchString.includes('two thousand five')) {
+    searchString += ' ' + bodyStr.toLowerCase();
+  }
+
+  // Clean out customer_id numbers (9942)
+  searchString = searchString.replace(/cust_9942/g, '').replace(/9942/g, '');
+
+  // Extract 4-digit number
+  const digitMatch = searchString.match(/\b\d{4}\b/) || searchString.match(/\d{4}/);
+  const extractedDigits = digitMatch ? digitMatch[0] : '';
+
+  const isVerified = (
+    (extractedDigits && (extractedDigits === customer.dob_year || extractedDigits === customer.last4_mobile)) ||
+    searchString.includes(customer.dob_year) ||
+    searchString.includes(customer.last4_mobile) ||
+    searchString.includes('two thousand five') ||
+    searchString.includes('twenty zero five') ||
+    searchString.includes('three two one zero')
+  );
+
+  console.log(`Verification result for customer [${customerId}]: Extracted digits [${extractedDigits}] => Verified: ${isVerified}`);
+
+  if (isVerified) {
+    return {
+      verified: true,
+      is_verified: true,
+      status: "verified",
+      customer_name: customer.name,
+      overdue_amount: customer.overdue_amount,
+      days_overdue: customer.days_overdue,
+      due_date: customer.due_date,
+      loan_type: customer.loan_type,
+      message: "Identity verified successfully. Overdue EMI details unlocked."
+    };
+  }
+
+  return {
+    verified: false,
+    is_verified: false,
+    status: "failed",
+    message: "Verification failed. Details do not match CRM records."
+  };
+}
+
+function handleLogPromiseToPay(args) {
+  const customerId = args.customer_id || 'CUST_9942';
+  const promisedDate = args.promised_date || '2026-08-18';
+  const promisedAmount = args.promised_amount || 8499;
+
+  return {
+    status: "success",
+    ptp_id: `PTP_${Math.floor(10000 + Math.random() * 90000)}`,
+    customer_id: customerId,
+    promised_date: promisedDate,
+    promised_amount: promisedAmount,
+    message: `Promise to Pay recorded for ₹${promisedAmount} on ${promisedDate}.`
+  };
+}
+
+async function handleSendPaymentLink(args) {
+  const customerId = args.customer_id || 'CUST_9942';
+  const channel = args.channel || 'Telegram';
+  const amount = args.amount || 8499;
+  const paymentUrl = `https://pay.kapture.fi/emi/${amount}`;
+
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || '8841894222:AAGycq_haCs1Pze5lc3kpZdPK1gBQdsZbTk';
+  const chatId = process.env.TELEGRAM_CHAT_ID || '1454696587';
+
+  // Dispatch payment notification to Telegram in background
+  dispatchTelegramNotification(chatId, botToken, paymentUrl, amount);
+
+  return {
+    status: "sent",
+    channel: channel,
+    payment_url: paymentUrl,
+    timestamp: new Date().toISOString(),
+    message: `Payment link of ₹${amount} successfully dispatched via ${channel}${botToken ? ' & Telegram' : ''}.`
+  };
+}
+
+function handleMarkDisposition(args) {
+  const customerId = args.customer_id || 'CUST_9942';
+  const dispositionCode = args.disposition_code || 'PTP_AGREED';
+  const notes = args.notes || 'Call completed successfully';
+
+  return {
+    status: "logged",
+    call_id: `CALL_${Math.floor(100000 + Math.random() * 900000)}`,
+    customer_id: customerId,
+    disposition_code: dispositionCode,
+    call_contained: args.call_contained ?? true,
+    notes: notes,
+    timestamp: new Date().toISOString()
+  };
+}
+
+// ==========================================
+// 4. API ROUTES
+// ==========================================
+
+// Health Check Endpoint
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    service: 'Kapture Finance Voicebot Webhook API',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Unified Vapi Tool Call Webhook Handler
+app.post('/api/webhook', async (req, res) => {
+  const extracted = extractToolCallMetadata(req);
+
+  if (!extracted) {
+    console.log('Non-tool / status update event received by webhook');
+    return res.status(200).json({
+      status: 'ok',
+      message: 'Webhook event received successfully'
+    });
+  }
+
+  const { functionName, toolCallId, args, bodyStr } = extracted;
+  console.log(`Executing Tool: [${functionName}] | toolCallId: [${toolCallId}] | arguments:`, args);
 
   let responseData = {};
 
   switch (functionName) {
-    case 'verify_customer': {
-      const customerId = args.customer_id || 'CUST_9942';
-      const customer = CUSTOMER_DB[customerId] || CUSTOMER_DB['CUST_9942'];
-      
-      // Build search string from args, excluding customer_id / 9942
-      const verificationArgs = { ...args };
-      delete verificationArgs.customer_id;
-      delete verificationArgs.customerId;
-
-      let searchString = Object.values(verificationArgs).map(v => String(v)).join(' ').toLowerCase();
-
-      // If args didn't contain 4-digit input or spoken number, fallback to full request payload (includes Vapi call transcript)
-      if (!searchString.match(/\d{4}/) && !searchString.includes('two thousand five')) {
-        console.log('No digits found in tool args; searching full webhook payload (transcript)...');
-        searchString += ' ' + bodyStr.toLowerCase();
-      }
-
-      // Clean out customer_id digits (9942) to prevent false matches
-      searchString = searchString.replace(/cust_9942/g, '').replace(/9942/g, '');
-
-      // Extract 4-digit number
-      const digitMatch = searchString.match(/\b\d{4}\b/) || searchString.match(/\d{4}/);
-      const extractedDigits = digitMatch ? digitMatch[0] : '';
-
-      const isVerified = (
-        (extractedDigits && (extractedDigits === customer.dob_year || extractedDigits === customer.last4_mobile)) ||
-        searchString.includes(customer.dob_year) ||
-        searchString.includes(customer.last4_mobile) ||
-        searchString.includes('two thousand five') ||
-        searchString.includes('twenty zero five') ||
-        searchString.includes('three two one zero')
-      );
-
-      console.log(`Verification check: extracted [${extractedDigits}] from searchString => Verified: ${isVerified}`);
-
-      if (isVerified) {
-        responseData = {
-          verified: true,
-          is_verified: true,
-          status: "verified",
-          customer_name: customer.name,
-          overdue_amount: customer.overdue_amount,
-          days_overdue: customer.days_overdue,
-          due_date: customer.due_date,
-          loan_type: customer.loan_type,
-          message: "Identity verified successfully. Overdue EMI details unlocked."
-        };
-      } else {
-        responseData = {
-          verified: false,
-          is_verified: false,
-          status: "failed",
-          message: "Verification failed. Details do not match CRM records."
-        };
-      }
+    case 'verify_customer':
+      responseData = handleVerifyCustomer(args, bodyStr);
       break;
-    }
-
-    case 'log_promise_to_pay': {
-      const customerId = args.customer_id || 'CUST_9942';
-      const promisedDate = args.promised_date || '2026-08-18';
-      const promisedAmount = args.promised_amount || 8499;
-
-      responseData = {
-        status: "success",
-        ptp_id: `PTP_${Math.floor(10000 + Math.random() * 90000)}`,
-        customer_id: customerId,
-        promised_date: promisedDate,
-        promised_amount: promisedAmount,
-        message: `Promise to Pay recorded for ₹${promisedAmount} on ${promisedDate}.`
-      };
+    case 'log_promise_to_pay':
+      responseData = handleLogPromiseToPay(args);
       break;
-    }
-
-    case 'send_payment_link': {
-      const customerId = args.customer_id || 'CUST_9942';
-      const channel = args.channel || 'Telegram';
-      const amount = args.amount || 8499;
-      const paymentUrl = `https://pay.kapture.fi/emi/${amount}`;
-
-      const botToken = process.env.TELEGRAM_BOT_TOKEN || '8841894222:AAGycq_haCs1Pze5lc3kpZdPK1gBQdsZbTk';
-      const chatId = process.env.TELEGRAM_CHAT_ID || '1454696587';
-
-      let telegramStatus = "Not Attempted";
-      if (botToken && chatId) {
-        const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-        const textMsg = `💳 Kapture Finance Payment Link\n\nDear Akhil,\nYour EMI of 8,499 Rupees is overdue by 12 days. Please click the secure link below to complete your payment:\n\n🔗 ${paymentUrl}\n\nThank you for choosing Kapture Finance.`;
-
-        try {
-          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-          const timerId = controller ? setTimeout(() => controller.abort(), 3000) : null;
-
-          await fetch(telegramUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller ? controller.signal : undefined,
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: textMsg
-            })
-          }).then(() => {
-            if (timerId) clearTimeout(timerId);
-            console.log(`Telegram message sent successfully to Chat ID: ${chatId}`);
-          }).catch(tgErr => {
-            if (timerId) clearTimeout(timerId);
-            console.error('Error sending Telegram notification:', tgErr.message);
-          });
-        } catch (e) {
-          console.error('Telegram dispatch init error:', e.message);
-        }
-      }
-
-      responseData = {
-        status: "sent",
-        channel: channel,
-        payment_url: paymentUrl,
-        timestamp: new Date().toISOString(),
-        message: `Payment link of ₹${amount} successfully dispatched via ${channel}${botToken ? ' & Telegram' : ''}.`
-      };
+    case 'send_payment_link':
+      responseData = await handleSendPaymentLink(args);
       break;
-    }
-
-    case 'mark_disposition': {
-      const customerId = args.customer_id || 'CUST_9942';
-      const dispositionCode = args.disposition_code || 'PTP_AGREED';
-      const notes = args.notes || 'Call completed successfully';
-
-      responseData = {
-        status: "logged",
-        call_id: `CALL_${Math.floor(100000 + Math.random() * 900000)}`,
-        customer_id: customerId,
-        disposition_code: dispositionCode,
-        call_contained: args.call_contained ?? true,
-        notes: notes,
-        timestamp: new Date().toISOString()
-      };
+    case 'mark_disposition':
+      responseData = handleMarkDisposition(args);
       break;
-    }
-
     default:
       responseData = {
         status: "unknown_function",
@@ -244,14 +284,13 @@ app.post('/api/webhook', async (req, res) => {
       };
   }
 
-  console.log(`Tool Result for ${functionName}:`, responseData);
+  console.log(`Tool Result [${functionName}]:`, responseData);
 
-  // Convert responseData to string as required by Vapi documentation (https://docs.vapi.ai/tools)
+  // Vapi documentation requirement: result field inside results array MUST be a string
   const resultString = typeof responseData === 'string'
     ? responseData
     : JSON.stringify(responseData);
 
-  // Standard Vapi Tool Response Format (200 OK with results array)
   return res.status(200).json({
     results: [
       {
@@ -262,12 +301,14 @@ app.post('/api/webhook', async (req, res) => {
   });
 });
 
+// ==========================================
+// 5. SERVER INITIALIZATION
+// ==========================================
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
-    console.log(`\n🚀 Kapture Finance Webhook Server running locally on port ${PORT}`);
-    console.log(`🔗 Local Endpoint: http://localhost:${PORT}/api/webhook`);
-    console.log(`💡 Expose with ngrok: ngrok http ${PORT}\n`);
+    console.log(`\n🚀 Kapture Finance Webhook Server running on port ${PORT}`);
+    console.log(`🔗 Local Endpoint: http://localhost:${PORT}/api/webhook\n`);
   });
 }
 
